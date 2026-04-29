@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 
-function TaskCard({ task, index, onDone, onDelete }) {
+const API = 'http://localhost:5000';
+
+function TaskCard({ task, onDone, onDelete }) {
   const today = new Date().toISOString().split('T')[0];
   const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
 
@@ -15,10 +17,10 @@ function TaskCard({ task, index, onDone, onDelete }) {
         </p>
       </div>
       <div>
-        <button className="done-btn" onClick={() => onDone(index)}>
+        <button className="done-btn" onClick={() => onDone(task.id)}>
           {task.completed ? 'Undo' : 'Done'}
         </button>
-        <button className="delete-btn" onClick={() => onDelete(index)}>
+        <button className="delete-btn" onClick={() => onDelete(task.id)}>
           Delete
         </button>
       </div>
@@ -32,21 +34,35 @@ function App() {
   const [priority, setPriority] = useState('high');
   const [dueDate, setDueDate] = useState('');
 
-  function addTask() {
+  // load tasks from backend when app opens
+  useEffect(() => {
+    fetch(`${API}/tasks`)
+      .then(res => res.json())
+      .then(data => setTasks(data));
+  }, []);
+
+  async function addTask() {
     if (input.trim() === '') return;
-    setTasks([...tasks, { name: input, completed: false, priority, dueDate }]);
+    const res = await fetch(`${API}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: input, priority, dueDate })
+    });
+    const newTask = await res.json();
+    setTasks([...tasks, newTask]);
     setInput('');
     setDueDate('');
   }
 
-  function markDone(index) {
-    const updated = [...tasks];
-    updated[index].completed = !updated[index].completed;
-    setTasks(updated);
+  async function markDone(id) {
+    const res = await fetch(`${API}/tasks/${id}`, { method: 'PUT' });
+    const updated = await res.json();
+    setTasks(tasks.map(t => t.id === id ? updated : t));
   }
 
-  function deleteTask(index) {
-    setTasks(tasks.filter((_, i) => i !== index));
+  async function deleteTask(id) {
+    await fetch(`${API}/tasks/${id}`, { method: 'DELETE' });
+    setTasks(tasks.filter(t => t.id !== id));
   }
 
   const done = tasks.filter(t => t.completed).length;
@@ -80,11 +96,10 @@ function App() {
       </div>
 
       <div className="task-list">
-        {tasks.map((task, index) => (
+        {tasks.map((task) => (
           <TaskCard
-            key={index}
+            key={task.id}
             task={task}
-            index={index}
             onDone={markDone}
             onDelete={deleteTask}
           />
